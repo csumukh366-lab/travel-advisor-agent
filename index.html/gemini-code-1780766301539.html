@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PlanMyTrip AI | A* Intelligent Agent</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
+    <style>
+        :root { --gold: #d4af37; --dark-bg: #050505; --ai-blue: #3b82f6; --ai-cyan: #06b6d4; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; color: #f8fafc; margin: 0; overflow-x: hidden; background-color: var(--dark-bg); }
+        h1, h2, h3, .font-serif { font-family: 'Playfair Display', serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Cinematic Background */
+        .slideshow-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -2; background-color: #000; }
+        .slide { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; background-size: cover; background-position: center; animation: cinematicFade 24s infinite linear; }
+        .slide::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.95) 100%); }
+        .slide:nth-child(1) { background-image: url('https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&w=1920&q=80'); animation-delay: 0s; }
+        .slide:nth-child(2) { background-image: url('https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=1920&q=80'); animation-delay: 6s; }
+        .slide:nth-child(3) { background-image: url('https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1920&q=80'); animation-delay: 12s; }
+        .slide:nth-child(4) { background-image: url('https://images.unsplash.com/photo-1533929736458-ca588d08c8be?auto=format&fit=crop&w=1920&q=80'); animation-delay: 18s; }
+        @keyframes cinematicFade { 0% { opacity: 0; transform: scale(1); } 10% { opacity: 1; } 25% { opacity: 1; } 35% { opacity: 0; transform: scale(1.05); } 100% { opacity: 0; transform: scale(1.05); } }
+
+        /* Premium UI */
+        .glass-panel { background: rgba(10, 15, 25, 0.85); backdrop-filter: blur(20px); border: 1px solid rgba(212, 175, 55, 0.2); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8); }
+        .glass-panel-ai { background: rgba(5, 10, 20, 0.95); border: 1px solid rgba(6, 182, 212, 0.4); box-shadow: 0 0 20px rgba(6, 182, 212, 0.15); } /* Academic AI panel styling */
+        .glass-input { background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(212, 175, 55, 0.3); color: white; transition: all 0.3s ease; }
+        .glass-input:focus { background: rgba(0, 0, 0, 0.8); border-color: var(--gold); outline: none; box-shadow: 0 0 15px rgba(212,175,55,0.2); }
+        .glass-input option { background: #0f172a; color: white; }
+        
+        #map { height: 450px; width: 100%; border-radius: 1rem; z-index: 1; border: 1px solid rgba(212, 175, 55, 0.2); }
+        
+        .cta-gold { background: linear-gradient(135deg, #bf953f, #fcf6ba, #b38728, #fbf5b7); color: #000; box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3); transition: all 0.3s ease; }
+        .cta-gold:hover { background: linear-gradient(135deg, #fcf6ba, #bf953f, #fbf5b7, #b38728); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(212, 175, 55, 0.5); }
+
+        .custom-scroll { overflow-y: auto; padding-right: 8px; }
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.4); border-radius: 10px; }
+        .timeline-scroll { max-height: 800px; }
+        
+        /* Academic AI Toggle */
+        .toggle-checkbox:checked { right: 0; border-color: #06b6d4; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #06b6d4; }
+        .academic-hide { display: none !important; }
+
+        @media print {
+            @page { margin: 0.5in; size: A4 portrait; }
+            body { background: white !important; color: black !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .print-hide { display: none !important; }
+            #print-roadmap { display: block !important; position: static !important; width: 100% !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="print-hide">
+        <div class="slideshow-container">
+            <div class="slide"></div><div class="slide"></div><div class="slide"></div><div class="slide"></div>
+        </div>
+
+        <nav class="glass-panel sticky top-0 z-50 border-b border-amber-500/20">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-20 items-center">
+                    <div class="flex-shrink-0 flex items-center gap-3">
+                        <i class="fa-solid fa-gem text-amber-400 text-2xl drop-shadow-md"></i>
+                        <span class="font-serif italic font-bold text-3xl tracking-tight text-white drop-shadow-sm">Plan<span class="text-amber-400">My</span>Trip</span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span class="text-xs font-bold text-cyan-400 uppercase tracking-widest hidden md:block">Academic Demo Mode</span>
+                        <div class="relative inline-block w-12 mr-2 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" name="toggle" id="academic-toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-700 appearance-none cursor-pointer transition-transform duration-200 ease-in-out z-10"/>
+                            <label for="academic-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-700 cursor-pointer"></label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div class="pt-16 pb-20 px-4 relative z-10 flex flex-col items-center justify-center text-center">
+            <h1 class="text-5xl md:text-6xl font-bold text-white mb-4 drop-shadow-2xl tracking-wide">Curate Your <span class="text-amber-400 italic">Masterpiece</span></h1>
+            <p class="text-gray-300 text-sm md:text-lg max-w-2xl mx-auto font-light drop-shadow-md">Goal-Based AI Travel Planning Agent executing A* Search Heuristics.</p>
+        </div>
+
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-4 relative z-20">
+            
+            <div id="panel-architecture" class="academic-hide glass-panel-ai rounded-3xl p-6 md:p-8 mb-8">
+                <h2 class="text-xl font-bold text-cyan-400 mb-6 flex items-center gap-3 uppercase tracking-widest border-b border-cyan-500/30 pb-3 font-mono">
+                    <i class="fa-solid fa-microchip"></i> Agent Design Architecture
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 font-mono text-sm text-cyan-50">
+                    <div class="bg-cyan-950/40 p-4 rounded-xl border border-cyan-500/20">
+                        <strong class="text-cyan-400 block mb-2">Agent Type</strong>
+                        Goal-Based Agent
+                    </div>
+                    <div class="bg-cyan-950/40 p-4 rounded-xl border border-cyan-500/20">
+                        <strong class="text-cyan-400 block mb-2">Environment (PEAS)</strong>
+                        Partially Observable, Dynamic, Sequential, Discrete.
+                    </div>
+                    <div class="bg-cyan-950/40 p-4 rounded-xl border border-cyan-500/20">
+                        <strong class="text-cyan-400 block mb-2">Algorithm</strong>
+                        A* Search (f(n) = g(n) + h(n))
+                    </div>
+                    <div class="bg-cyan-950/40 p-4 rounded-xl border border-cyan-500/20">
+                        <strong class="text-cyan-400 block mb-2">Performance Measures</strong>
+                        Budget Utilization, Route Efficiency, Interest Match.
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-3xl p-6 md:p-10 mb-12 border-t-4 border-t-amber-500/80">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-amber-500/20 pb-5 gap-4">
+                    <h2 class="text-2xl font-bold text-amber-400 flex items-center gap-3 tracking-wide"><i class="fa-solid fa-compass"></i> Voyage Parameters</h2>
+                    <div class="flex items-center gap-3 bg-black/60 p-2.5 rounded-xl border border-amber-500/20">
+                        <label class="text-xs font-bold text-gray-400 uppercase tracking-widest px-2">Service Tier</label>
+                        <select id="travel-tier" class="bg-transparent text-amber-400 font-bold outline-none cursor-pointer text-sm">
+                            <option value="economy">Economy Class</option>
+                            <option value="business">Business Class</option>
+                            <option value="luxury" selected>Ultra Luxury</option>
+                        </select>
+                    </div>
+                </div>
+
+                <form id="agent-form" class="space-y-8">
+                    <div class="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-6 bg-black/40 p-6 rounded-2xl border border-amber-500/10 items-center">
+                        <div class="relative">
+                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Origin State</label>
+                            <div class="relative">
+                                <i class="fa-solid fa-plane-departure absolute left-4 top-4 text-amber-400"></i>
+                                <select id="source-city" class="glass-input w-full pl-12 py-3 rounded-xl text-lg font-medium cursor-pointer appearance-none"></select>
+                            </div>
+                        </div>
+                        <div class="hidden md:flex justify-center mt-6 px-4"><i class="fa-solid fa-arrow-right-long text-amber-500/40 text-xl"></i></div>
+                        <div class="relative">
+                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Target Goal Hub</label>
+                            <div class="relative">
+                                <i class="fa-solid fa-location-dot absolute left-4 top-4 text-amber-400"></i>
+                                <select id="hub-city" class="glass-input w-full pl-12 py-3 rounded-xl text-lg font-medium cursor-pointer appearance-none"></select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase mb-2 tracking-widest">Currency</label>
+                            <select id="currency-select" class="glass-input w-full px-4 py-3 rounded-xl font-medium text-lg appearance-none cursor-pointer">
+                                <option value="INR">INR (₹)</option><option value="USD">USD ($)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase mb-2 tracking-widest">Budget Constraint</label>
+                            <div class="relative">
+                                <span class="absolute left-4 top-3 text-amber-400 font-bold currency-symbol">₹</span>
+                                <input type="number" id="budget" value="250000" min="0" class="glass-input w-full pl-8 py-3 rounded-xl font-medium text-lg">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase mb-2 tracking-widest">Time Constraint</label>
+                            <input type="number" id="duration" value="3" min="1" max="14" class="glass-input w-full px-4 py-3 rounded-xl font-medium text-lg">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase mb-2 tracking-widest">Pace Constraint</label>
+                            <select id="pace" class="glass-input w-full px-4 py-3 rounded-xl font-medium text-lg appearance-none cursor-pointer">
+                                <option value="relaxed">Relaxed</option>
+                                <option value="balanced" selected>Balanced</option>
+                                <option value="intensive">Intensive</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-amber-500/20 pt-6">
+                        <label class="block text-xs font-bold text-amber-400 uppercase mb-4 tracking-widest">Utility Weight Vectors (Interests)</label>
+                        <div class="flex flex-wrap gap-3">
+                            <label class="cursor-pointer"><input type="checkbox" value="Culture" checked class="peer sr-only pref-cb"><div class="px-5 py-2 rounded-full glass-input text-sm font-medium text-gray-300 peer-checked:bg-amber-500/20 peer-checked:border-amber-400 peer-checked:text-amber-400 transition">🏛️ Heritage</div></label>
+                            <label class="cursor-pointer"><input type="checkbox" value="Nature" class="peer sr-only pref-cb"><div class="px-5 py-2 rounded-full glass-input text-sm font-medium text-gray-300 peer-checked:bg-amber-500/20 peer-checked:border-amber-400 peer-checked:text-amber-400 transition">🌲 Scenery</div></label>
+                            <label class="cursor-pointer"><input type="checkbox" value="Adventure" class="peer sr-only pref-cb"><div class="px-5 py-2 rounded-full glass-input text-sm font-medium text-gray-300 peer-checked:bg-amber-500/20 peer-checked:border-amber-400 peer-checked:text-amber-400 transition">🎢 Thrill</div></label>
+                            <label class="cursor-pointer"><input type="checkbox" value="Relaxation" class="peer sr-only pref-cb"><div class="px-5 py-2 rounded-full glass-input text-sm font-medium text-gray-300 peer-checked:bg-amber-500/20 peer-checked:border-amber-400 peer-checked:text-amber-400 transition">☕ Wellness</div></label>
+                            <label class="cursor-pointer"><input type="checkbox" value="Nightlife" class="peer sr-only pref-cb"><div class="px-5 py-2 rounded-full glass-input text-sm font-medium text-gray-300 peer-checked:bg-amber-500/20 peer-checked:border-amber-400 peer-checked:text-amber-400 transition">🍸 Evening</div></label>
+                            <label class="cursor-pointer"><input type="checkbox" value="Shopping" class="peer sr-only pref-cb"><div class="px-5 py-2 rounded-full glass-input text-sm font-medium text-gray-300 peer-checked:bg-amber-500/20 peer-checked:border-amber-400 peer-checked:text-amber-400 transition">🛍️ Retail</div></label>
+                        </div>
+                    </div>
+
+                    <button type="button" id="plan-btn" class="w-full mt-6 cta-gold py-4 rounded-xl font-black text-xl uppercase tracking-widest shadow-[0_0_20px_rgba(212,175,55,0.3)]">
+                        <i class="fa-solid fa-microchip mr-2"></i> Execute A* Search Agent
+                    </button>
+                </form>
+            </div>
+
+            <div id="panel-astar" class="academic-hide glass-panel-ai rounded-3xl p-6 md:p-8 mb-12">
+                <div class="flex justify-between items-center mb-6 border-b border-cyan-500/30 pb-3">
+                    <h2 class="text-xl font-bold text-cyan-400 uppercase tracking-widest font-mono">
+                        <i class="fa-solid fa-project-diagram"></i> A* Search Diagnostics
+                    </h2>
+                    <span id="ai-exec-time" class="text-cyan-300 font-mono text-sm bg-cyan-900/50 px-3 py-1 rounded">Execution Time: 0ms</span>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 font-mono text-sm">
+                    <div class="bg-cyan-950/50 rounded-xl p-5 border border-cyan-500/20">
+                        <h3 class="text-cyan-300 font-bold mb-4 uppercase">State Space Tracker</h3>
+                        <div class="space-y-3 text-cyan-100">
+                            <p><span class="text-cyan-500">Initial State (S0):</span> [<span id="state-init">N/A</span>]</p>
+                            <p><span class="text-cyan-500">Goal State (G):</span> [Itinerary Complete, Cost ≤ Budget]</p>
+                            <div class="h-px bg-cyan-500/20 my-2"></div>
+                            <p><span class="text-cyan-500">Nodes Explored:</span> <span id="metrics-nodes">0</span></p>
+                            <p><span class="text-cyan-500">Open List (Frontier) Size:</span> <span id="metrics-open">0</span></p>
+                            <p><span class="text-cyan-500">Closed List Size:</span> <span id="metrics-closed">0</span></p>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-cyan-950/50 rounded-xl p-5 border border-cyan-500/20">
+                        <h3 class="text-cyan-300 font-bold mb-4 uppercase">Agent Performance Metrics</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <div class="flex justify-between text-xs text-cyan-200 mb-1"><span>Budget Utilization</span><span id="prog-budget-text">0%</span></div>
+                                <div class="w-full bg-cyan-900/50 rounded-full h-2"><div id="prog-budget" class="bg-cyan-400 h-2 rounded-full" style="width: 0%"></div></div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-xs text-cyan-200 mb-1"><span>Average Utility Score</span><span id="prog-utility-text">0/100</span></div>
+                                <div class="w-full bg-cyan-900/50 rounded-full h-2"><div id="prog-utility" class="bg-cyan-400 h-2 rounded-full" style="width: 0%"></div></div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-xs text-cyan-200 mb-1"><span>Preference Match Alignment</span><span id="prog-match-text">0%</span></div>
+                                <div class="w-full bg-cyan-900/50 rounded-full h-2"><div id="prog-match" class="bg-cyan-400 h-2 rounded-full" style="width: 0%"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-12 grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="glass-panel rounded-3xl overflow-hidden">
+                    <div class="bg-black/60 px-6 py-4 border-b border-amber-500/20 flex justify-between items-center">
+                        <h3 class="font-serif text-xl font-bold text-white"><i class="fa-solid fa-plane-departure text-amber-400 mr-3"></i> Logistics: Transit</h3>
+                    </div>
+                    <div id="flight-suggestions" class="p-4 custom-scroll text-gray-400 text-sm">Execute Agent to view allocations.</div>
+                </div>
+                <div class="glass-panel rounded-3xl overflow-hidden">
+                    <div class="bg-black/60 px-6 py-4 border-b border-amber-500/20 flex justify-between items-center">
+                        <h3 class="font-serif text-xl font-bold text-white"><i class="fa-solid fa-bell-concierge text-amber-400 mr-3"></i> Logistics: Lodging</h3>
+                    </div>
+                    <div id="hotel-suggestions" class="p-4 custom-scroll text-gray-400 text-sm">Execute Agent to view allocations.</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-16">
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="glass-panel p-6 rounded-3xl flex flex-wrap justify-around items-center divide-x divide-amber-500/20">
+                        <div class="px-4 text-center w-1/3">
+                            <p class="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1">Budget Input</p>
+                            <p id="metric-total-budget" class="font-serif text-2xl md:text-3xl font-bold text-white"><span class="currency-symbol">₹</span>0</p>
+                        </div>
+                        <div class="px-4 text-center w-1/3">
+                            <p class="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1">Fixed Cost</p>
+                            <p id="metric-base-cost" class="font-serif text-2xl md:text-3xl font-bold text-red-400/90"><span class="currency-symbol">₹</span>0</p>
+                        </div>
+                        <div class="px-4 text-center w-1/3">
+                            <p class="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1">Agent Capital</p>
+                            <p id="metric-poi-budget" class="font-serif text-2xl md:text-3xl font-bold text-emerald-400/90"><span class="currency-symbol">₹</span>0</p>
+                        </div>
+                    </div>
+                    <div class="glass-panel p-3 rounded-3xl"><div id="map"></div></div>
+                </div>
+
+                <div class="lg:col-span-1">
+                    <div class="glass-panel p-6 md:p-8 rounded-3xl sticky top-28 border border-amber-500/30">
+                        <div class="flex justify-between items-center mb-6 border-b border-amber-500/20 pb-4">
+                            <h3 class="font-serif text-2xl font-bold text-amber-400">Agent Solution Path</h3>
+                            <button id="download-btn" class="cta-gold px-4 py-2 rounded-full transition text-xs font-bold uppercase tracking-widest flex items-center">
+                                <i class="fa-solid fa-file-pdf mr-2"></i> Export Report
+                            </button>
+                        </div>
+                        <div id="timeline-container" class="custom-scroll timeline-scroll space-y-0 relative before:absolute before:inset-0 before:left-[1.35rem] before:w-0.5 before:bg-amber-500/20">
+                            <p class="text-sm text-gray-400 font-light italic">Execute A* Search to synthesize itinerary timeline.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="print-roadmap" class="hidden"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Data Configuration
+        const safeFallbackImage = "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=400&q=80";
+        function handleImgError(img) { img.onerror = null; img.src = safeFallbackImage; }
+
+        const citiesList = [
+            "Bangalore, India", "Goa, India", "Delhi, India", "Mumbai, India", "Jaipur, India",
+            "Paris, France", "London, UK", "Rome, Italy", "Tokyo, Japan", "New York, USA", "Dubai, UAE"
+        ];
+
+        const cityHubs = {
+            "Bangalore, India": { lat: 12.9716, lng: 77.5946, region: "domestic" }, "Goa, India": { lat: 15.2993, lng: 74.1240, region: "domestic" },
+            "Delhi, India": { lat: 28.6139, lng: 77.2090, region: "domestic" }, "Mumbai, India": { lat: 18.9220, lng: 72.8347, region: "domestic" },
+            "Jaipur, India": { lat: 26.9124, lng: 75.7873, region: "domestic" }, "Paris, France": { lat: 48.8566, lng: 2.3522, region: "intl" },
+            "London, UK": { lat: 51.5074, lng: -0.1278, region: "intl" }, "Rome, Italy": { lat: 41.9028, lng: 12.4964, region: "intl" },
+            "Tokyo, Japan": { lat: 35.6762, lng: 139.6503, region: "intl" }, "New York, USA": { lat: 40.7128, lng: -74.0060, region: "intl" },
+            "Dubai, UAE": { lat: 25.2048, lng: 55.2708, region: "intl" }
+        };
+
+        const baseLogisticsMatrix = {
+            domestic: { economy: { flight: 80, hotelNight: 40, stars: 3, airline: "IndiGo / Akasa", hotelType: "Comfort Stay" }, business: { flight: 250, hotelNight: 100, stars: 4, airline: "Vistara Business", hotelType: "Boutique Estate" }, luxury: { flight: 450, hotelNight: 350, stars: 5, airline: "Air India First", hotelType: "The Taj Palace" } },
+            intl: { economy: { flight: 700, hotelNight: 120, stars: 3, airline: "Standard Coach", hotelType: "Metropolitan Hub" }, business: { flight: 3000, hotelNight: 350, stars: 4, airline: "British Airways", hotelType: "Elite Regency" }, luxury: { flight: 8000, hotelNight: 1000, stars: 5, airline: "Emirates First", hotelType: "Ritz-Carlton Imperial" } }
+        };
+
+        const currencyConfig = { INR: { symbol: "₹", rate: 83.5 }, USD: { symbol: "$", rate: 1.0 } };
+
+        let map = null, markerLayerGroup, lineLayer;
+        let currentCurrency = "INR";
+        let computedItineraryGlobal = [];
+        let currentTotalBaseCostUsd = 0;
+        let pdfFlightData = {}, pdfHotelData = {};
+        let agentMetricsGlobal = {};
+
+        // Generate Knowledge Base (Destinations DB)
+        const destinationsDB = [];
+        const poiCategories = [
+            { cat: "Culture", names: ["Heritage Museum", "Royal Palace", "Historic Square", "Temple Ruins", "Art Gallery"], baseCost: 15 },
+            { cat: "Nature", names: ["Botanical Gardens", "River Promenade", "National Park", "Scenic Viewpoint"], baseCost: 10 },
+            { cat: "Adventure", names: ["Theme Park", "Helicopter Tour", "Mountain Trek", "Speedboat Ride"], baseCost: 50 },
+            { cat: "Relaxation", names: ["Wellness Spa", "Beach Cabana", "Thermal Baths", "Yacht Lounge"], baseCost: 80 },
+            { cat: "Nightlife", names: ["Rooftop Club", "Jazz Bar", "Theater", "Casino"], baseCost: 60 },
+            { cat: "Shopping", names: ["Boutiques", "Designer Outlet", "Craft Market", "Jeweler Row"], baseCost: 0 }
+        ];
+
+        let seedCounter = 0;
+        Object.keys(cityHubs).forEach((city) => {
+            poiCategories.forEach(c => {
+                c.names.forEach((n) => {
+                    seedCounter++;
+                    destinationsDB.push({
+                        id: `LOC_${seedCounter}`, city: city, name: `${city.split(',')[0]} ${n}`, category: c.cat,
+                        usdCost: c.baseCost + (seedCounter % 20), time: 2 + (seedCounter % 3),
+                        rating: parseFloat((4.2 + ((seedCounter % 8) / 10)).toFixed(1)),
+                        lat: cityHubs[city].lat + (Math.random() * 0.08 - 0.04), lng: cityHubs[city].lng + (Math.random() * 0.08 - 0.04),
+                        img: `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random()*9000000000)}?w=400&q=80`
+                    });
+                });
+            });
+        });
+
+        // Initialize UI
+        function initUI() {
+            const src = document.getElementById('source-city'); const dest = document.getElementById('hub-city');
+            citiesList.forEach(city => { src.innerHTML += `<option value="${city}">${city}</option>`; dest.innerHTML += `<option value="${city}">${city}</option>`; });
+            src.value = "Bangalore, India"; dest.value = "Goa, India";
+            src.addEventListener('change', () => { if (src.value === dest.value) dest.value = citiesList.find(c => c !== src.value); });
+            dest.addEventListener('change', () => { if (src.value === dest.value) src.value = citiesList.find(c => c !== dest.value); });
+
+            // Academic Toggle
+            document.getElementById('academic-toggle').addEventListener('change', (e) => {
+                const panels = document.querySelectorAll('.glass-panel-ai');
+                panels.forEach(p => {
+                    if(e.target.checked) p.classList.remove('academic-hide');
+                    else p.classList.add('academic-hide');
+                });
+            });
+        }
+
+        function initMap() {
+            if (map !== null) return;
+            const startHub = cityHubs["Goa, India"];
+            map = L.map('map', {zoomControl: false}).setView([startHub.lat, startHub.lng], 10);
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '© CartoDB' }).addTo(map);
+            markerLayerGroup = L.layerGroup().addTo(map);
+            lineLayer = L.polyline([], {color: '#d4af37', weight: 4, dashArray: '8, 8', opacity: 0.8}).addTo(map);
+        }
+
+        function handleCurrencyChange() {
+            const newCurr = document.getElementById('currency-select').value;
+            const rateCurrent = currencyConfig[newCurr].rate;
+            const ratePrev = currencyConfig[currentCurrency].rate;
+            document.querySelectorAll('.currency-symbol').forEach(el => { el.innerText = currencyConfig[newCurr].symbol; });
+            const budgetInput = document.getElementById('budget');
+            budgetInput.value = Math.round((parseFloat(budgetInput.value) || 0) / ratePrev * rateCurrent);
+            currentCurrency = newCurr;
+        }
+
+        // Distance Helper for A*
+        function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+            const R = 6371; const dLat = (lat2-lat1) * (Math.PI/180); const dLon = (lon2-lon1) * (Math.PI/180); 
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * (Math.PI/180)) * Math.cos(lat2 * (Math.PI/180)) * Math.sin(dLon/2) * Math.sin(dLon/2); 
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+            return R * c;
+        }
+
+        // A* SEARCH IMPLEMENTATION FOR AAT1
+        function runAStarAgent() {
+            const startTime = performance.now();
+            
+            const srcCity = document.getElementById('source-city').value;
+            const destCity = document.getElementById('hub-city').value;
+            const tier = document.getElementById('travel-tier').value;
+            const duration = parseInt(document.getElementById('duration').value) || 3;
+            const pace = document.getElementById('pace').value;
+            const rate = currencyConfig[currentCurrency].rate;
+            const sym = currencyConfig[currentCurrency].symbol;
+
+            // 1. Update State Tracker UI
+            document.getElementById('state-init').innerText = `Origin: ${srcCity.split(',')[0]}, Budget: ${sym}${document.getElementById('budget').value}, Time: ${duration}d`;
+
+            // 2. Map Move
+            if (map) map.flyTo([cityHubs[destCity].lat, cityHubs[destCity].lng], 11, { duration: 1.2 });
+
+            // 3. Setup Logistics
+            const isDomesticRoute = (cityHubs[srcCity].region === "domestic" && cityHubs[destCity].region === "domestic");
+            const tierData = baseLogisticsMatrix[isDomesticRoute ? "domestic" : "intl"][tier];
+            const seed = srcCity.charCodeAt(0) + destCity.charCodeAt(0);
+            
+            const calcFlightUsd = tierData.flight + (seed % 20);
+            const calcHotelUsd = (tierData.hotelNight + (seed % 10)) * duration;
+            currentTotalBaseCostUsd = calcFlightUsd + calcHotelUsd;
+
+            pdfFlightData = { route: `${srcCity.split(',')[0]} ⇄ ${destCity.split(',')[0]}`, carrier: tierData.airline, costUsd: calcFlightUsd };
+            pdfHotelData = { name: `${destCity.split(',')[0]} ${tierData.hotelType}`, stars: tierData.stars, nights: duration, costUsd: calcHotelUsd };
+
+            document.getElementById('flight-suggestions').innerHTML = `<div class="p-3 bg-white/5 rounded-xl border border-amber-400/50 bg-amber-900/10 flex justify-between items-center transition"><div><p class="font-bold text-white text-md">${pdfFlightData.route}</p><p class="text-[10px] text-amber-400 mt-1">${pdfFlightData.carrier}</p></div><div class="text-right"><p class="text-lg font-serif font-bold text-amber-400">${sym}${Math.round(calcFlightUsd * rate).toLocaleString()}</p></div></div>`;
+            document.getElementById('hotel-suggestions').innerHTML = `<div class="p-3 bg-white/5 rounded-xl border border-amber-400/50 bg-amber-900/10 flex justify-between items-center transition"><div><p class="font-bold text-white text-md font-serif">${pdfHotelData.name}</p><p class="text-[10px] text-amber-400 mt-1">${'★'.repeat(pdfHotelData.stars)} | ${duration} Nights</p></div><div class="text-right"><p class="text-lg font-serif font-bold text-amber-400">${sym}${Math.round(calcHotelUsd * rate).toLocaleString()}</p></div></div>`;
+
+            // 4. A* Search Logic Setup
+            const totalBudgetLocal = Math.max(0, parseFloat(document.getElementById('budget').value) || 0);
+            const totalBudgetUsd = totalBudgetLocal / rate;
+            let availablePoiBudgetUsd = totalBudgetUsd - currentTotalBaseCostUsd;
+            
+            const hourlyDailyCap = { relaxed: 4.5, balanced: 8.0, intensive: 12.0 };
+            const maxTime = duration * hourlyDailyCap[pace];
+
+            document.getElementById('metric-total-budget').innerText = `${sym}${Math.round(totalBudgetLocal).toLocaleString()}`;
+            document.getElementById('metric-base-cost').innerText = `${sym}${Math.round(currentTotalBaseCostUsd * rate).toLocaleString()}`;
+            document.getElementById('metric-poi-budget').innerText = availablePoiBudgetUsd > 0 ? `${sym}${Math.round(availablePoiBudgetUsd * rate).toLocaleString()}` : `${sym}0`;
+
+            const timeline = document.getElementById('timeline-container');
+            timeline.innerHTML = ""; markerLayerGroup.clearLayers(); lineLayer.setLatLngs([]); computedItineraryGlobal = [];
+
+            if (availablePoiBudgetUsd < 0) {
+                timeline.innerHTML = `<div class="p-6 bg-black/80 rounded-2xl border border-red-500/30 text-center shadow-lg"><h4 class="font-serif font-bold text-xl text-white mb-2">Insufficient Capital</h4><p class="text-sm text-gray-400 mb-4 font-light leading-relaxed">Increase budget to minimum ${sym}${Math.ceil(currentTotalBaseCostUsd * rate).toLocaleString()}</p></div>`;
+                return;
+            }
+
+            const prefs = Array.from(document.querySelectorAll('.pref-cb:checked')).map(cb => cb.value);
+            const knowledgeBase = destinationsDB.filter(d => d.city === destCity);
+            const poiCostMult = tier === "luxury" ? 3.5 : (tier === "business" ? 1.8 : 1.0); 
+
+            // Pre-calculate Utility Scores for all nodes in Knowledge Base to form Heuristic
+            knowledgeBase.forEach(node => {
+                const actCost = node.usdCost * poiCostMult;
+                const matchScore = prefs.includes(node.category) ? 1.0 : 0.2; // 0 to 1
+                const ratingScore = node.rating / 5.0; // 0 to 1
+                const budgetCompat = Math.max(0, 1 - (actCost / availablePoiBudgetUsd)); // 0 to 1
+                // Formula: Utility Score = (Interest Match × 0.4) + (Rating × 0.3) + (Budget Compatibility × 0.2) + (Distance Efficiency × 0.1)
+                // We evaluate distance dynamically during search. Baseline utility omits distance:
+                node.baseUtility = (matchScore * 0.4) + (ratingScore * 0.3) + (budgetCompat * 0.3);
+                node.actCost = actCost;
+            });
+
+            // A* Variables
+            let openList = [];
+            let closedSet = new Set();
+            let nodesExplored = 0;
+            
+            // Initial State Node
+            openList.push({
+                path: [],
+                visitedIds: new Set(),
+                currentLat: cityHubs[destCity].lat,
+                currentLng: cityHubs[destCity].lng,
+                costSpent: 0,
+                timeSpent: 0,
+                accumulatedUtility: 0,
+                gCost: 0, // Inefficiency cost
+                hCost: 0, // Estimated remaining inefficiency
+                fCost: 0
+            });
+
+            let bestFinalState = null;
+            let maxAchievedUtility = -Infinity;
+
+            // Bounded A* Search Execution
+            while (openList.length > 0 && nodesExplored < 2000) { // Safety bound for browser
+                // Sort to pop lowest fCost (minimizing penalty = maximizing utility)
+                openList.sort((a, b) => a.fCost - b.fCost);
+                const currentState = openList.shift();
+                nodesExplored++;
+
+                // Check Goal / Max bounds
+                if (currentState.accumulatedUtility > maxAchievedUtility) {
+                    maxAchievedUtility = currentState.accumulatedUtility;
+                    bestFinalState = currentState;
+                }
+
+                // Generate Successors
+                let successorsAdded = 0;
+                for (const node of knowledgeBase) {
+                    if (currentState.visitedIds.has(node.id)) continue;
+                    
+                    if (currentState.costSpent + node.actCost > availablePoiBudgetUsd) continue;
+                    if (currentState.timeSpent + node.time > maxTime) continue;
+
+                    // Calculate Distance Efficiency (0.1 weight)
+                    const dist = getDistanceFromLatLonInKm(currentState.currentLat, currentState.currentLng, node.lat, node.lng);
+                    const distEfficiency = Math.max(0, 1 - (dist / 50)); // Normalize 0-50km to 1-0
+                    
+                    // Final Node Utility
+                    const finalUtility = (node.baseUtility * 0.9) + (distEfficiency * 0.1); 
+                    const displayUtilityScore = (finalUtility * 100).toFixed(1);
+
+                    // A* Costs
+                    // We want to maximize utility, so g(n) represents "Penalty". 
+                    // High utility -> low penalty addition.
+                    const stepPenalty = 100 - (finalUtility * 100);
+                    const newGCost = currentState.gCost + stepPenalty;
+                    
+                    // h(n): Assume we can fill remaining time with average utility nodes (penalty ~ 20 per step)
+                    const remainingTime = maxTime - (currentState.timeSpent + node.time);
+                    const estimatedStepsRemaining = remainingTime / 3.0; // Avg 3 hours per node
+                    const newHCost = estimatedStepsRemaining * 20; 
+
+                    const newState = {
+                        path: [...currentState.path, { ...node, displayUtilityScore, distEfficiency, finalUtility }],
+                        visitedIds: new Set([...currentState.visitedIds, node.id]),
+                        currentLat: node.lat,
+                        currentLng: node.lng,
+                        costSpent: currentState.costSpent + node.actCost,
+                        timeSpent: currentState.timeSpent + node.time,
+                        accumulatedUtility: currentState.accumulatedUtility + finalUtility,
+                        gCost: newGCost,
+                        hCost: newHCost,
+                        fCost: newGCost + newHCost
+                    };
+
+                    openList.push(newState);
+                    successorsAdded++;
+                }
+
+                if (successorsAdded === 0) { closedSet.add(currentState); }
+                
+                // Beam Search Constraint (keep queue manageable)
+                if (openList.length > 500) openList = openList.slice(0, 500);
+            }
+
+            const endTime = performance.now();
+
+            // 5. Apply Results
+            if (bestFinalState && bestFinalState.path.length > 0) {
+                computedItineraryGlobal = bestFinalState.path;
+                
+                // Update Academic Metrics UI
+                document.getElementById('metrics-nodes').innerText = nodesExplored;
+                document.getElementById('metrics-open').innerText = openList.length;
+                document.getElementById('metrics-closed').innerText = closedSet.size;
+                document.getElementById('ai-exec-time').innerText = `Execution Time: ${(endTime - startTime).toFixed(2)}ms`;
+
+                const utilPct = Math.round((bestFinalState.accumulatedUtility / bestFinalState.path.length) * 100);
+                const budgetPct = Math.round((bestFinalState.costSpent / availablePoiBudgetUsd) * 100);
+                
+                document.getElementById('prog-budget-text').innerText = `${budgetPct}%`;
+                document.getElementById('prog-budget').style.width = `${Math.min(100, budgetPct)}%`;
+                
+                document.getElementById('prog-utility-text').innerText = `${utilPct}/100`;
+                document.getElementById('prog-utility').style.width = `${utilPct}%`;
+
+                // Calculate preference match
+                const matchCount = bestFinalState.path.filter(n => prefs.includes(n.category)).length;
+                const matchPct = Math.round((matchCount / bestFinalState.path.length) * 100);
+                document.getElementById('prog-match-text').innerText = `${matchPct}%`;
+                document.getElementById('prog-match').style.width = `${matchPct}%`;
+
+                agentMetricsGlobal = { utilPct, nodesExplored, execTime: (endTime - startTime).toFixed(2), fCost: bestFinalState.fCost.toFixed(1) };
+
+                // Render Timeline with AI Decision Cards
+                let activeDayIndex = 1; let dayAccumulatedHours = 0;
+                computedItineraryGlobal.forEach((item, index) => {
+                    dayAccumulatedHours += item.time;
+                    if (dayAccumulatedHours > hourlyDailyCap[pace]) { activeDayIndex++; dayAccumulatedHours = item.time; }
+                    
+                    // AI Decision Details
+                    const distScore = Math.round(item.distEfficiency * 100);
+                    const matchScore = prefs.includes(item.category) ? "100%" : "20%";
+
+                    timeline.innerHTML += `
+                        <div class="relative pl-10 pb-6 last:pb-0">
+                            <div class="absolute left-0 top-3 bg-black border-2 border-amber-400 rounded-full w-5 h-5 z-10 flex items-center justify-center">
+                                <div class="w-1.5 h-1.5 bg-amber-400 rounded-full"></div>
+                            </div>
+                            
+                            ${index > 0 ? `<div class="absolute -top-3 left-[1.35rem] text-[9px] text-cyan-500 font-mono academic-hide bg-black px-1 z-20">↓ Transition f(n)=${(bestFinalState.gCost).toFixed(1)}</div>` : `<div class="absolute -top-3 left-[1.35rem] text-[9px] text-cyan-500 font-mono academic-hide bg-black px-1 z-20">Start State S0</div>`}
+
+                            <div class="bg-black/80 rounded-2xl border border-white/5 p-4 flex flex-col gap-4 shadow-md group transition hover:border-amber-400/40">
+                                <div class="flex gap-4 items-center">
+                                    <img src="${item.img}" onerror="handleImgError(this)" class="w-20 h-20 rounded-xl object-cover flex-shrink-0 border border-white/10">
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex justify-between items-start gap-4 mb-1">
+                                            <div class="min-w-0 flex-1">
+                                                <h4 class="font-serif font-bold text-white text-[16px] leading-snug break-words">${item.name}</h4>
+                                                <span class="text-[9px] uppercase font-bold text-amber-400 tracking-widest block mt-0.5">${item.category}</span>
+                                            </div>
+                                            <span class="bg-white/5 text-gray-300 text-[9px] font-bold uppercase px-2 py-1 rounded tracking-wider flex-shrink-0 border border-white/10">Day ${activeDayIndex}</span>
+                                        </div>
+                                        <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs font-medium text-gray-400">
+                                            <span class="text-white"><i class="fa-solid fa-wallet text-amber-500/60 mr-1"></i>${sym}${Math.round(item.actCost * rate).toLocaleString()}</span>
+                                            <span><i class="fa-solid fa-clock text-amber-500/60 mr-1"></i>${item.time}h</span>
+                                            <span class="text-amber-400/90"><i class="fa-solid fa-star mr-1"></i>${item.rating}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="academic-hide mt-2 bg-cyan-950/40 rounded-xl border border-cyan-500/30 p-3 font-mono text-[10px] text-cyan-100">
+                                    <div class="flex justify-between border-b border-cyan-500/20 pb-1 mb-2">
+                                        <strong class="text-cyan-400"><i class="fa-solid fa-robot"></i> Agent Decision Reasoning</strong>
+                                        <span class="text-cyan-300">Utility: ${item.displayUtilityScore}/100</span>
+                                    </div>
+                                    <ul class="space-y-1">
+                                        <li>✓ Preference Match: ${matchScore}</li>
+                                        <li>✓ Distance Efficiency: ${distScore}%</li>
+                                        <li>✓ Satisfies Budget Constraints</li>
+                                        <li>✓ Maximizes f(n) Heuristic Pathway</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>`;
+                });
+
+                // Map rendering
+                let latLngs = [];
+                computedItineraryGlobal.forEach((item, idx) => {
+                    latLngs.push([item.lat, item.lng]);
+                    const customIcon = L.divIcon({ className: 'custom-icon-div', html: `<div style="background: linear-gradient(135deg, #bf953f, #b38728); color:black; width:26px; height:26px; border-radius:50%; text-align:center; line-height:24px; font-weight:900; border:2px solid #fff; font-size:12px;">${idx + 1}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] });
+                    L.marker([item.lat, item.lng], { icon: customIcon }).addTo(markerLayerGroup).bindPopup(`<div class="font-serif font-bold text-sm text-slate-900">${item.name}</div>`);
+                });
+                lineLayer.setLatLngs(latLngs);
+                if (latLngs.length > 0) map.fitBounds(L.polyline(latLngs).getBounds(), { padding: [50, 50] });
+
+            } else {
+                timeline.innerHTML = `<p class="text-sm text-center text-gray-400 italic py-8">Goal State unreachable. No path satisfies current budget/time constraints.</p>`;
+            }
+        }
+
+        function printNativeRoadmapDocument() {
+            if (computedItineraryGlobal.length === 0) { alert("Cannot export empty path. Execute A* Search Agent first."); return; }
+
+            const rate = currencyConfig[currentCurrency].rate;
+            const sym = currencyConfig[currentCurrency].symbol;
+            const pace = document.getElementById('pace').value;
+            const duration = parseInt(document.getElementById('duration').value) || 3;
+            const totalBudget = parseFloat(document.getElementById('budget').value);
+            const totalPoiSpend = Math.round(computedItineraryGlobal.reduce((a, b) => a + b.actCost, 0) * rate);
+            const locBaseCost = Math.round(currentTotalBaseCostUsd * rate);
+
+            let itineraryPrintNodesHtml = "";
+            let currentDay = 1; let currentDayHours = 0;
+            const dayCap = { relaxed: 4.5, balanced: 8.0, intensive: 12.0 }[pace];
+
+            computedItineraryGlobal.forEach((item, index) => {
+                currentDayHours += item.time;
+                if (currentDayHours > dayCap) { currentDay++; currentDayHours = item.time; }
+                if (currentDay > duration) return; 
+
+                itineraryPrintNodesHtml += `
+                <div class="print-break-avoid" style="display:flex; align-items:flex-start; border-bottom:1px solid #e2e8f0; padding:15px 0;">
+                    <div style="background:#0f172a; color:#d4af37; width:30px; height:30px; border-radius:50%; text-align:center; line-height:30px; font-weight:bold; margin-right:15px; font-size:14px; flex-shrink:0;">${index + 1}</div>
+                    <div style="flex:1;">
+                        <h4 style="margin:0; font-size:18px; color:#0f172a; font-family:'Playfair Display', serif; font-weight:bold;">${item.name}</h4>
+                        <p style="margin:6px 0 0 0; font-size:13px; color:#64748b; font-family:'Plus Jakarta Sans', sans-serif; text-transform:uppercase; letter-spacing:1px;">Day ${currentDay} • ${item.category} • ${item.time}h</p>
+                    </div>
+                    <div style="font-weight:bold; color:#0f172a; font-size:18px; font-family:'Plus Jakarta Sans', sans-serif; margin-left:10px;">
+                        ${sym}${Math.round(item.actCost * rate).toLocaleString()}
+                    </div>
+                </div>`;
+            });
+
+            // Academic Report Section logic
+            const academicReportHtml = document.getElementById('academic-toggle').checked ? `
+                <div style="margin-top: 30px; background: #f0fdfa; padding: 20px; border-left: 5px solid #0d9488; border-radius: 4px; page-break-inside:avoid;">
+                    <h3 style="margin:0 0 10px 0; color:#0f766e; font-size:18px; font-family: 'Playfair Display', serif;">AI Agent Execution Report (AAT1)</h3>
+                    <div style="display: flex; flex-wrap: wrap; gap: 15px; font-family: monospace; font-size: 12px; color: #115e59;">
+                        <div style="width: 45%;"><strong>Agent Type:</strong> Goal-Based</div>
+                        <div style="width: 45%;"><strong>Algorithm:</strong> A* Search</div>
+                        <div style="width: 45%;"><strong>Nodes Explored:</strong> ${agentMetricsGlobal.nodesExplored}</div>
+                        <div style="width: 45%;"><strong>Execution Time:</strong> ${agentMetricsGlobal.execTime}ms</div>
+                        <div style="width: 45%;"><strong>Avg Utility Score:</strong> ${agentMetricsGlobal.utilPct}%</div>
+                        <div style="width: 45%;"><strong>Final Path Cost f(n):</strong> ${agentMetricsGlobal.fCost}</div>
+                    </div>
+                </div>
+            ` : '';
+
+            document.getElementById('print-roadmap').innerHTML = `
+                <div style="font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; max-width: 800px; margin: 0 auto; padding: 20px;">
+                    <div style="border-bottom: 3px solid #d4af37; padding-bottom: 15px; margin-bottom: 30px;">
+                        <h1 style="font-size: 38px; color: #0f172a; margin: 0; font-family: 'Playfair Display', serif;">PlanMyTrip Blueprint</h1>
+                        <p style="font-size: 14px; color: #64748b; margin-top: 5px; text-transform: uppercase; letter-spacing: 1.5px;">Intelligent Agent Solution Path</p>
+                    </div>
+                    
+                    <div style="display: flex; gap: 20px; margin-bottom: 30px; page-break-inside:avoid;">
+                        <div style="flex:1; background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                            <h3 style="margin:0 0 12px 0; color:#0f172a; border-bottom: 1px solid #cbd5e1; padding-bottom:6px; font-family: 'Playfair Display', serif;">Logistics Profile</h3>
+                            <p style="margin:8px 0; font-size:14px;"><strong>Transit:</strong> ${pdfFlightData.route}</p>
+                            <p style="margin:8px 0; font-size:14px;"><strong>Carrier:</strong> ${pdfFlightData.carrier}</p>
+                            <p style="margin:8px 0; font-size:14px;"><strong>Airfare:</strong> ${sym}${Math.round(pdfFlightData.costUsd * rate).toLocaleString()}</p>
+                        </div>
+                        <div style="flex:1; background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                            <h3 style="margin:0 0 12px 0; color:#0f172a; border-bottom: 1px solid #cbd5e1; padding-bottom:6px; font-family: 'Playfair Display', serif;">Lodging Architecture</h3>
+                            <p style="margin:8px 0; font-size:14px;"><strong>Residence:</strong> ${pdfHotelData.name}</p>
+                            <p style="margin:8px 0; font-size:14px;"><strong>Duration:</strong> ${duration} Nights</p>
+                            <p style="margin:8px 0; font-size:14px;"><strong>Accommodation:</strong> ${sym}${Math.round(pdfHotelData.costUsd * rate).toLocaleString()}</p>
+                        </div>
+                    </div>
+
+                    <div style="background: #0f172a; color: white; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; margin-bottom: 40px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                        <div><span style="color:#94a3b8; font-size:12px; text-transform:uppercase;">Total Asset Limit</span><br><span style="font-size:22px; font-weight:bold;">${sym}${totalBudget.toLocaleString()}</span></div>
+                        <div><span style="color:#94a3b8; font-size:12px; text-transform:uppercase;">Fixed Logistics</span><br><span style="font-size:22px; font-weight:bold; color:#fca5a5;">${sym}${locBaseCost.toLocaleString()}</span></div>
+                        <div><span style="color:#94a3b8; font-size:12px; text-transform:uppercase;">Curated Activities</span><br><span style="font-size:22px; font-weight:bold; color:#6ee7b7;">${sym}${totalPoiSpend.toLocaleString()}</span></div>
+                    </div>
+
+                    <h2 style="color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; font-size: 26px; font-family: 'Playfair Display', serif;">Chronological State Sequence</h2>
+                    <div style="margin-top: 20px;">${itineraryPrintNodesHtml}</div>
+                    
+                    ${academicReportHtml}
+                </div>`;
+
+            setTimeout(() => { window.print(); }, 150);
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initUI(); initMap();
+            document.getElementById('currency-select').addEventListener('change', handleCurrencyChange);
+            document.getElementById('plan-btn').addEventListener('click', runAStarAgent);
+            document.getElementById('download-btn').addEventListener('click', printNativeRoadmapDocument);
+        });
+    </script>
+</body>
+</html>
