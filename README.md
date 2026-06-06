@@ -14,14 +14,8 @@ An advanced travel planning engine that treats itinerary generation as a pathfin
 - **Mapping:** Leaflet.js
 - **PDF Generation:** Browser-native Print Engine
 
-## ⚙️ Installation
-1. Clone the repository: `git clone https://github.com/yourusername/planmytrip-ai.git`
-2. Open `index.html` in your preferred web browser.
-
 ## 📜 Academic Info (AAT1)
 - **Agent Type:** Goal-Based Agent
 - **Search Algorithm:** A* (f(n) = g(n) + h(n))
 - **Environment:** Partially Observable, Sequential, Multi-State
 
-## 📝 License
-Distributed under the MIT License. See `LICENSE` for more information.
